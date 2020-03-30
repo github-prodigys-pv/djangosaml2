@@ -83,7 +83,7 @@ class Saml2Backend(ModelBackend):
         logger.debug('attributes: %s', attributes)
         saml_user = None
         if use_name_id_as_username:
-            if 'name_id' in session_info:
+            if 'name_id' in session_info and session_info['name_id']!=None:
                 logger.debug('name_id: %s', session_info['name_id'])
                 saml_user = session_info['name_id'].text
             else:
