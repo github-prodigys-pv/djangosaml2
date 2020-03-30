@@ -53,7 +53,7 @@ from saml2.response import (
     UnsolicitedResponse, StatusNoAuthnContext,
 )
 from saml2.validate import ResponseLifetimeExceed, ToEarly
-from saml2.xmldsig import SIG_RSA_SHA1, SIG_RSA_SHA256  # support for SHA1 is required by spec
+from saml2.xmldsig import SIG_RSA_SHA1, SIG_RSA_SHA256, DIGEST_SHA1, DIGEST_SHA256  # support for SHA1 is required by spec
 
 from djangosaml2.cache import IdentityCache, OutstandingQueriesCache
 from djangosaml2.cache import StateCache
@@ -194,19 +194,18 @@ def login(request,
     client = Saml2Client(conf)
     http_response = None
 
+    sign_alg = getattr(conf, 'signing_algorithm', SIG_RSA_SHA1)
+    digest_alg = getattr(conf, 'digest_algorithm', DIGEST_SHA1)
+
     logger.debug('Redirecting user to the IdP via %s binding.', binding)
     if binding == BINDING_HTTP_REDIRECT:
         try:
-            # do not sign the xml itself, instead use the sigalg to
+            # do not sign the xml itself, instead use the sign_alg to
             # generate the signature as a URL param
-            sig_alg_option_map = {'sha1': SIG_RSA_SHA1,
-                                  'sha256': SIG_RSA_SHA256}
-            sig_alg_option = getattr(conf, '_sp_authn_requests_signed_alg', 'sha1')
-            sigalg = sig_alg_option_map[sig_alg_option] if sign_requests else None
             nsprefix = get_namespace_prefixes()
             session_id, result = client.prepare_for_authenticate(
                 entityid=selected_idp, relay_state=came_from,
-                binding=binding, sign=False, sigalg=sigalg,
+                binding=binding, sign=sign_requests, sign_alg=sign_alg, digest_alg=digest_alg,
                 nsprefix=nsprefix, **kwargs)
         except TypeError as e:
             logger.error('Unable to know which IdP to use')
@@ -224,6 +223,9 @@ def login(request,
             session_id, request_xml = client.create_authn_request(
                 location,
                 binding=binding,
+                sign=sign_requests,
+                digest_alg=digest_alg,
+                sign_alg=sign_alg,
                 **kwargs)
             try:
                 if PY3:
@@ -232,12 +234,12 @@ def login(request,
                     saml_request = base64.b64encode(binary_type(request_xml))
 
                 http_response = render(request, post_binding_form_template, {
-                    'target_url': location,
-                    'params': {
-                        'SAMLRequest': saml_request,
-                        'RelayState': came_from,
-                        },
-                    })
+                'target_url': location,
+                'params': {
+                    'SAMLRequest': saml_request,
+                    'RelayState': came_from,
+                    },
+                })
             except TemplateDoesNotExist:
                 pass
 
@@ -400,7 +402,10 @@ def logout(request, config_loader_path=None):
             'The session does not contain the subject id for user %s',
             request.user)
 
-    result = client.global_logout(subject_id)
+    sign_requests = getattr(conf, '_sp_logout_requests_signed', False)
+    sign_alg = getattr(conf, 'signing_algorithm', SIG_RSA_SHA1)
+    digest_alg = getattr(conf, 'digest_algorithm', DIGEST_SHA1)
+    result = client.global_logout(subject_id,sign=sign_requests,sign_alg=sign_alg,digest_alg=digest_alg)
 
     state.sync()
 

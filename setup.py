@@ -74,7 +74,7 @@ setup(
     install_requires=[
         'defusedxml>=0.4.1',
         'Django>=1.8',
-        'pysaml2>=4.6.0',
+        'pysaml2 @ git+https://github.com/peppelinux/pysaml2@fb5d18905a3245dc5ea269f1525f5b21bf6263f1#egg=pysaml2-5.0.0-sha2fix'
         ],
     extras_require=extra,
     )
